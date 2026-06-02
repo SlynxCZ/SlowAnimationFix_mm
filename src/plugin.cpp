@@ -3,10 +3,10 @@
 #include "plugin.h"
 #include "utils.hpp"
 
+#include "sdk/CBasePlayerController.h"
+
 #include "memaddr.hpp"
 #include "module.hpp"
-
-#include "sdk/CServerSideClient.h"
 
 #include "eiface.h"
 #include "iserver.h"
@@ -27,72 +27,68 @@ using namespace DynLibUtils;
 Plugin g_Plugin;
 PLUGIN_EXPOSE(Plugin, g_Plugin);
 
-ConVarRefAbstract* g_TvEnable = nullptr;
-
-struct GameSessionConfiguration_t {
-public:
-    char pad[0x64]; // 0x0
-    int maxPlayers; // 0x64
-};
-
-SH_DECL_HOOK2_void(CServerSideClient, Disconnect, SH_NOATTRIB, 0, ENetworkDisconnectionReason, const char*);
-SH_DECL_HOOK3_void(INetworkServerService, StartupServer, SH_NOATTRIB, 0, const GameSessionConfiguration_t&, ISource2WorldSession*, const char*);
+SH_DECL_HOOK3_void(ISource2Server, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
 
 bool Plugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool late)
 {
     PLUGIN_SAVEVARS();
 
-    GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
-    GET_V_IFACE_CURRENT(GetEngineFactory, g_pEngineServer, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
-    GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkServerService, INetworkServerService, NETWORKSERVERSERVICE_INTERFACE_VERSION);
-
-    g_TvEnable = new ConVarRefAbstract("tv_enable");
-
-    CModule libengine(g_pEngineServer);
+    GET_V_IFACE_CURRENT(GetServerFactory, g_pSource2Server, ISource2Server, INTERFACEVERSION_SERVERGAMEDLL);
+    GET_V_IFACE_CURRENT(GetEngineFactory, g_pEngineServer, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
+    GET_V_IFACE_CURRENT(GetEngineFactory, g_pSchemaSystem, ISchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
+    GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceServiceServer, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 
     // VirtualTable Hooks
     {
-        CMemory pCServerSideClientVTable = libengine.GetVirtualTableByName("CServerSideClient");
-
-        m_iDisconnectHookID = SH_ADD_DVPHOOK(CServerSideClient, Disconnect, pCServerSideClientVTable.RCast<CServerSideClient*>(), SH_MEMBER(this, &Plugin::CServerSideClient_Disconnect), false);
-        m_iStartupServerHookID = SH_ADD_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService, SH_MEMBER(this, &Plugin::INetworkServerService_StartupServer), false);
+        m_iGameFrameHookID = SH_ADD_HOOK(ISource2Server, GameFrame, g_pSource2Server, SH_MEMBER(this, &Plugin::CSource2Server_GameFrame), false);
     }
 
     g_SMAPI->AddListener(this, this);
-
-    ConVar_Register(FCVAR_RELEASE | FCVAR_CLIENT_CAN_EXECUTE | FCVAR_GAMEDLL);
 
     return true;
 }
 
 bool Plugin::Unload(char* error, size_t maxlen)
 {
-    SH_REMOVE_HOOK_ID(m_iDisconnectHookID);
-    SH_REMOVE_HOOK_ID(m_iStartupServerHookID);
+    SH_REMOVE_HOOK_ID(m_iGameFrameHookID);
 
     return true;
 }
 
-void Plugin::CServerSideClient_Disconnect(ENetworkDisconnectionReason reason, const char* pszInternalReason)
+void Plugin::CSource2Server_GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 {
-    CServerSideClient* pClient = META_IFACEPTR(CServerSideClient);
-    if (pClient->m_bIsHLTV && g_TvEnable && g_TvEnable->GetBool())
-    {
-        META_LOG(this, "GOTV is enabled, blocking CServerSideClient disconnect\n");
+    if (!simulating)
+        RETURN_META(MRES_IGNORED);
 
-        RETURN_META(MRES_SUPERCEDE);
+    CGlobalVars* gpGlobals = g_pEngineServer->GetServerGlobals();
+    if (!gpGlobals)
+        RETURN_META(MRES_IGNORED);
+
+    constexpr float CURTIME_THRESHOLD = 3600.0f; // reset after 1h idle
+    constexpr float CURTIME_BASELINE  = 60.0f; // lets use 60s as baseline
+
+    float& curtime = gpGlobals->curtime;
+    int& tickcount = gpGlobals->tickcount;
+    float ipt = *CMemory(gpGlobals).Offset(0x54).RCast<float*>();
+
+    if (curtime < CURTIME_THRESHOLD)
+        RETURN_META(MRES_IGNORED);
+
+    for (int i = 0; i < gpGlobals->maxClients; i++)
+    {
+        auto controller = static_cast<CBasePlayerController*>(GameEntitySystem()->GetEntityInstance(CEntityIndex(i + 1)));
+        if(controller)
+        {
+            if (controller->m_iConnected() == PlayerConnectedState::Connected)
+            {
+                RETURN_META(MRES_IGNORED);
+            }
+        }
     }
 
-    RETURN_META(MRES_IGNORED);
-}
-
-void Plugin::INetworkServerService_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* session, const char*)
-{
-    if (g_TvEnable && g_TvEnable->GetBool())
-    {
-        META_LOG(this, "GOTV is enabled, expanding game session maxplayers (%i -> %i)\n", config.maxPlayers, config.maxPlayers + 1);
-        const_cast<GameSessionConfiguration_t&>(config).maxPlayers++;
-    }
+    float offset = curtime - CURTIME_BASELINE;
+    curtime -= offset;
+    tickcount = static_cast<int>(CURTIME_BASELINE / ipt);
 
     RETURN_META(MRES_IGNORED);
 }
@@ -124,7 +120,7 @@ const char* Plugin::GetDate()
 
 const char* Plugin::GetLogTag()
 {
-    return "DemoRecordFix";
+    return "SlowAnimationFix";
 }
 
 const char* Plugin::GetAuthor()
@@ -134,12 +130,12 @@ const char* Plugin::GetAuthor()
 
 const char* Plugin::GetDescription()
 {
-    return "Demo record fix";
+    return "Slow animation fix";
 }
 
 const char* Plugin::GetName()
 {
-    return "Demo record fix";
+    return "Slow animation fix";
 }
 
 const char* Plugin::GetURL()

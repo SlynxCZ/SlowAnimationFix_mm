@@ -24,11 +24,9 @@ private:
 	const char* GetLogTag() override;
 
 public:
-	void CServerSideClient_Disconnect(ENetworkDisconnectionReason reason, const char* pszInternalReason);
-	void INetworkServerService_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* session, const char*);
+	void CSource2Server_GameFrame(bool simulating, bool bFirstTick, bool bLastTick);
 
-	int m_iDisconnectHookID;
-	int m_iStartupServerHookID;
+	int m_iGameFrameHookID;
 };
 
 extern Plugin g_Plugin;

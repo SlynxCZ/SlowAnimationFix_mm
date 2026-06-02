@@ -1,5 +1,5 @@
 ﻿cmake_minimum_required(VERSION 3.18)
-project(demo_record_fix C CXX ASM)
+project(slow_animation_fix C CXX ASM)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
@@ -79,13 +79,13 @@ if (LINUX)
     include(${CMAKE_SOURCE_DIR}/makefiles/linux.base.cmake)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         PREFIX ""
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/addons/demo_record_fix/bin/linuxsteamrt64"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/addons/slow_animation_fix/bin/linuxsteamrt64"
     )
 elseif (WIN32)
     include(${CMAKE_SOURCE_DIR}/makefiles/windows.base.cmake)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         PREFIX ""
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/addons/demo_record_fix/bin/win64"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/addons/slow_animation_fix/bin/win64"
     )
 endif()
 
