@@ -3,7 +3,7 @@
 #include "plugin.h"
 #include "utils.hpp"
 
-#include "sdk/CBasePlayerController.h"
+#include "CBasePlayerController.h"
 
 #include "memaddr.hpp"
 #include "module.hpp"

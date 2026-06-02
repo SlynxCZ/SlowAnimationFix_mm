@@ -45,6 +45,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/protobuf
+    ${CMAKE_SOURCE_DIR}/src/sdk
     ${SOURCESDK}
     ${SOURCESDK}/thirdparty/protobuf-3.21.8/src
     ${SOURCESDK}/common

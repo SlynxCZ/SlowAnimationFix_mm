@@ -1,5 +1,5 @@
 "Metamod Plugin"
 {
-	"alias"	"demo_record_fix"
-	"file"	"addons/demo_record_fix/bin/${PROJECT_VDF_PLATFORM}/demo_record_fix"
+	"alias"	"slow_animation_fix"
+	"file"	"addons/slow_animation_fix/bin/${PROJECT_VDF_PLATFORM}/slow_animation_fix"
 }
