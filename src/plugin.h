@@ -1,4 +1,4 @@
-﻿#ifndef _INCLUDE_SLOW_ANIMATION_FIX_PLUGIN_SLYNX_H_
+#ifndef _INCLUDE_SLOW_ANIMATION_FIX_PLUGIN_SLYNX_H_
 #define _INCLUDE_SLOW_ANIMATION_FIX_PLUGIN_SLYNX_H_
 #ifdef _WIN32
 #pragma once
@@ -6,6 +6,7 @@
 
 #include "inetchannel.h"
 #include "ISmmPlugin.h"
+#include "iserver.h"
 
 class Plugin final : public ISmmPlugin, IMetamodListener
 {
@@ -18,15 +19,17 @@ private:
 	const char* GetName() override;
 	const char* GetDescription() override;
 	const char* GetURL() override;
-	const char* GetLicense()override ;
+	const char* GetLicense() override;
 	const char* GetVersion() override;
 	const char* GetDate() override;
 	const char* GetLogTag() override;
 
 public:
-	void CSource2Server_GameFrame(bool simulating, bool bFirstTick, bool bLastTick);
+	void Hook_GameFrame(bool simulating, bool bFirstTick, bool bLastTick);
+	void Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char*);
 
 	int m_iGameFrameHookID;
+	int m_iStartupServerHookID;
 };
 
 extern Plugin g_Plugin;

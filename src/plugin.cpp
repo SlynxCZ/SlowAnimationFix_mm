@@ -1,6 +1,7 @@
-﻿// Author: Michal Přikryl (Slynx) <github.com/SlynxCZ>
+// Author: Michal Přikryl (Slynx) <github.com/SlynxCZ>
 
 #include "plugin.h"
+#include "scheduler.h"
 #include "utils.hpp"
 
 #include "CBasePlayerController.h"
@@ -9,9 +10,11 @@
 #include "module.hpp"
 
 #include "eiface.h"
+#include "entitysystem.h"
+#include "icvar.h"
 #include "iserver.h"
 #include "interfaces/interfaces.h"
-#include "entitysystem.h"
+#include "tier1/convar.h"
 
 #include <cstdint>
 #include <sstream>
@@ -24,10 +27,27 @@
 
 using namespace DynLibUtils;
 
+CConVarRef<float> mp_timelimit("mp_timelimit");
+
+static constexpr float CHECK_INTERVAL = 1800.0f; // 30 minutes
+static constexpr float CURTIME_THRESHOLD = 3600.0f; // 1 hour
+
+static double g_dMapStartUniversalTime = 0.0;
+static float g_fPendingTimelimitAdjust = -1.0f;
+
 Plugin g_Plugin;
 PLUGIN_EXPOSE(Plugin, g_Plugin);
 
+class GameSessionConfiguration_t
+{
+};
+
 SH_DECL_HOOK3_void(ISource2Server, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
+SH_DECL_HOOK3_void(INetworkServerService, StartupServer, SH_NOATTRIB, 0, const GameSessionConfiguration_t&, ISource2WorldSession*, const char*);
+
+int CountConnectedPlayers();
+void DoChangelevel();
+void OnCheckTimer();
 
 bool Plugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool late)
 {
@@ -37,11 +57,16 @@ bool Plugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool l
     GET_V_IFACE_CURRENT(GetEngineFactory, g_pEngineServer, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
     GET_V_IFACE_CURRENT(GetEngineFactory, g_pSchemaSystem, ISchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
     GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceServiceServer, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
+    GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkServerService, INetworkServerService, NETWORKSERVERSERVICE_INTERFACE_VERSION);
+    GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
 
-    // VirtualTable Hooks
     {
-        m_iGameFrameHookID = SH_ADD_HOOK(ISource2Server, GameFrame, g_pSource2Server, SH_MEMBER(this, &Plugin::CSource2Server_GameFrame), false);
+        m_iGameFrameHookID = SH_ADD_HOOK(ISource2Server, GameFrame, g_pSource2Server, SH_MEMBER(this, &Plugin::Hook_GameFrame), false);
+        m_iStartupServerHookID = SH_ADD_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService, SH_MEMBER(this, &Plugin::Hook_StartupServer), false);
     }
+
+    scheduler::Init();
+    scheduler::AddTimer(CHECK_INTERVAL, OnCheckTimer, TIMER_FLAG_REPEAT);
 
     g_SMAPI->AddListener(this, this);
 
@@ -50,47 +75,97 @@ bool Plugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool l
 
 bool Plugin::Unload(char* error, size_t maxlen)
 {
+    scheduler::Shutdown();
+
     SH_REMOVE_HOOK_ID(m_iGameFrameHookID);
+    SH_REMOVE_HOOK_ID(m_iStartupServerHookID);
 
     return true;
 }
 
-void Plugin::CSource2Server_GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
+void Plugin::Hook_GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 {
-    if (!simulating)
-        RETURN_META(MRES_IGNORED);
+    scheduler::Tick(simulating);
+    RETURN_META(MRES_IGNORED);
+}
 
-    CGlobalVars* gpGlobals = g_pEngineServer->GetServerGlobals();
-    if (!gpGlobals)
-        RETURN_META(MRES_IGNORED);
+void Plugin::Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char*)
+{
+    scheduler::RemoveMapChangeTimers();
 
-    constexpr float CURTIME_THRESHOLD = 3600.0f; // reset after 1h idle
-    constexpr float CURTIME_BASELINE  = 60.0f; // lets use 60s as baseline
+    g_dMapStartUniversalTime = g_dUniversalTime;
 
-    float& curtime = gpGlobals->curtime;
-    int& tickcount = gpGlobals->tickcount;
-    float ipt = *CMemory(gpGlobals).Offset(0x54).RCast<float*>();
-
-    if (curtime < CURTIME_THRESHOLD)
-        RETURN_META(MRES_IGNORED);
-
-    for (int i = 0; i < gpGlobals->maxClients; i++)
+    if (g_fPendingTimelimitAdjust >= 0.0f)
     {
-        auto controller = static_cast<CBasePlayerController*>(GameEntitySystem()->GetEntityInstance(CEntityIndex(i + 1)));
-        if(controller)
+        float adjusted = g_fPendingTimelimitAdjust;
+        g_fPendingTimelimitAdjust = -1.0f;
+
+        scheduler::NextFrame([adjusted]()
         {
-            if (controller->m_iConnected() == PlayerConnectedState::Connected)
-            {
-                RETURN_META(MRES_IGNORED);
-            }
-        }
+            char cmd[64];
+            V_snprintf(cmd, sizeof(cmd), "mp_timelimit %.1f\n", (adjusted > 0.0f ? adjusted : 0.1f));
+            g_pEngineServer->ServerCommand(cmd);
+        });
     }
 
-    float offset = curtime - CURTIME_BASELINE;
-    curtime -= offset;
-    tickcount = static_cast<int>(CURTIME_BASELINE / ipt);
-
     RETURN_META(MRES_IGNORED);
+}
+
+int CountConnectedPlayers()
+{
+    CGlobalVars* gpGlobals = g_pEngineServer->GetServerGlobals();
+    if (!gpGlobals) return 0;
+
+    int count = 0;
+    for (int i = 0; i < gpGlobals->maxClients; i++)
+    {
+        auto* controller = static_cast<CBasePlayerController*>(
+            GameEntitySystem()->GetEntityInstance(CEntityIndex(i + 1)));
+        if (controller && controller->m_iConnected() == PlayerConnectedState::Connected)
+            ++count;
+    }
+    return count;
+}
+
+void DoChangelevel()
+{
+    CNetworkGameServerBase* pGameServer = g_pNetworkServerService->GetIGameServer();
+    if (!pGameServer) return;
+
+    const char* mapName = pGameServer->GetMapName();
+    if (!mapName || mapName[0] == '\0') return;
+
+    double elapsedSeconds = g_dUniversalTime - g_dMapStartUniversalTime;
+    float elapsedMinutes = static_cast<float>(elapsedSeconds) / 60.0f;
+
+    float originalTimelimit = 0.0f;
+    if (mp_timelimit.IsValidRef())
+        originalTimelimit = mp_timelimit.Get();
+
+    if (originalTimelimit > 0.0f)
+        g_fPendingTimelimitAdjust = originalTimelimit - elapsedMinutes;
+
+    if (g_pEngineServer->IsMapValid(mapName))
+    {
+        g_pEngineServer->ChangeLevel(mapName, nullptr);
+    }
+    else
+    {
+        char cmd[512];
+        V_snprintf(cmd, sizeof(cmd), "dg_workshop_changelevel %s\n", mapName);
+        g_pEngineServer->ServerCommand(cmd);
+    }
+}
+
+void OnCheckTimer()
+{
+    CGlobalVars* gpGlobals = g_pEngineServer->GetServerGlobals();
+    if (!gpGlobals) return;
+
+    if (gpGlobals->curtime < CURTIME_THRESHOLD) return;
+
+    if (CountConnectedPlayers() == 0)
+        DoChangelevel();
 }
 
 ///////////////////////////////////////

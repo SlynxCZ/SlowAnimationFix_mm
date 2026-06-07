@@ -16,6 +16,7 @@ for sdk_target in MMSPlugin.sdk_targets:
 
   binary.sources += [
     os.path.join('src', 'plugin.cpp'),
+    os.path.join('src', 'scheduler.cpp'),
   ]
 
   binary.sources += [

@@ -1,14 +1,12 @@
 # SlowAnimationFix_mm
 
-**Experimental metamod plugin fixing slow-motion/sluggish animation bug on CS2 servers.**
+**Metamod plugin fixing slow-motion/sluggish animation bug on CS2 servers.**
 
 ---
 
 ## Problem
 
-After a CS2 server has been running the same map for a long time without a map change or restart, players experience slow-motion animations and sluggish movement when joining.
-
-**Root cause:** `curtime` in `CGlobalVars` is a 32-bit float. As it grows larger over time, floating point precision degrades — at ~24h uptime the precision drops to half a tick, at ~48h it exceeds a full tick interval. This causes animation, movement and lag compensation to produce incorrect results.
+After a CS2 server has been running the same map for a long time, `curtime` in `CGlobalVars` accumulates as a 32-bit float. As it grows, floating-point precision degrades — at ~24 h uptime the precision drops to half a tick, at ~48 h it exceeds a full tick interval. This causes animation, movement, and lag-compensation to produce incorrect results.
 
 Valve never added a reset mechanism for `curtime` in any code path.
 
@@ -16,25 +14,39 @@ Valve never added a reset mechanism for `curtime` in any code path.
 
 ## What it does
 
-* Hooks `ISource2Server::GameFrame` every tick
-* When `curtime` exceeds a threshold **and** the server is empty, subtracts a large offset from `curtime` and adjusts `tickcount` accordingly
-* Preserves all relative time differences — entity timers, think callbacks and scheduled events are unaffected
+Every **30 minutes** the plugin checks whether the server is empty (no connected players) **and** whether `curtime` has exceeded the 1-hour threshold where precision issues begin.
+
+When both conditions are met the plugin performs a changelevel back to the same map:
+
+* **Regular map** — calls `IVEngineServer2::ChangeLevel` directly.
+* **Workshop map** — issues a `ds_workshop_changelevel <map>` server command (detected via `IsMapValid`).
+
+### mp_timelimit compensation
+
+To avoid players losing round time after an invisible fix-triggered map reload, the plugin automatically adjusts `mp_timelimit` on the new map:
+
+```
+new_mp_timelimit = original_mp_timelimit - elapsed_minutes_before_reload
+```
+
+For example, if a 60-minute map was 45 minutes in when the fix fired, the reloaded map starts with `mp_timelimit 15` so the total round duration stays 60 minutes.
 
 ---
 
 ## Result
 
 * Server can run indefinitely on the same map without the slow-motion bug appearing
-* No map restarts required
-* Zero impact during active gameplay — correction only happens on an empty server
+* No manual restarts required
+* Zero impact during active gameplay — the check only acts on an empty server
+* Round time is seamlessly preserved via automatic `mp_timelimit` correction
 
 ---
 
 ## Notes
 
-* Marked **experimental** — the fix is based on reversed `CGlobalVars` offsets from `libserver.so` and `libengine2.so`
-* Tested on 64-tick dedicated servers
-* Default threshold: **1 hour** of accumulated curtime on an empty server
+* The check runs every 30 minutes and only triggers after `curtime` exceeds **1 hour** (`CURTIME_THRESHOLD`).  Both constants are `constexpr` at the top of `plugin.cpp`.
+* Uses a self-contained scheduler (`scheduler.h` / `scheduler.cpp`) ticked from `ISource2Server::GameFrame`, modelled after [Source2Toolkit](https://github.com/SlynxCZ).
+* Tested on 64-tick dedicated servers.
 
 ---
 
@@ -46,5 +58,5 @@ Valve never added a reset mechanism for `curtime` in any code path.
 
 ## Author
 
-Slynx (˙·٠● S l y n x ●٠·˙)
+Slynx (˙·٠● S l y n x ●٠·˙)  
 [https://slynxdev.cz](https://slynxdev.cz)
