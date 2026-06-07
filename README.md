@@ -14,9 +14,7 @@ Valve never added a reset mechanism for `curtime` in any code path.
 
 ## What it does
 
-Every **30 minutes** the plugin checks whether the server is empty (no connected players) **and** whether `curtime` has exceeded the 1-hour threshold where precision issues begin.
-
-When both conditions are met the plugin performs a changelevel back to the same map:
+Every **30 minutes** the plugin checks whether the server is empty (no connected players) and if so performs a changelevel back to the same map:
 
 * **Regular map** — calls `IVEngineServer2::ChangeLevel` directly.
 * **Workshop map** — issues a `ds_workshop_changelevel <map>` server command (detected via `IsMapValid`).
@@ -44,7 +42,7 @@ For example, if a 60-minute map was 45 minutes in when the fix fired, the reload
 
 ## Notes
 
-* The check runs every 30 minutes and only triggers after `curtime` exceeds **1 hour** (`CURTIME_THRESHOLD`).  Both constants are `constexpr` at the top of `plugin.cpp`.
+* The check interval is `CHECK_INTERVAL` (`constexpr float` at the top of `plugin.cpp`, default 30 minutes).
 * Uses a self-contained scheduler (`scheduler.h` / `scheduler.cpp`) ticked from `ISource2Server::GameFrame`, modelled after [Source2Toolkit](https://github.com/SlynxCZ).
 * Tested on 64-tick dedicated servers.
 

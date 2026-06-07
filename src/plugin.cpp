@@ -30,7 +30,6 @@ using namespace DynLibUtils;
 CConVarRef<float> mp_timelimit("mp_timelimit");
 
 static constexpr float CHECK_INTERVAL = 1800.0f; // 30 minutes
-static constexpr float CURTIME_THRESHOLD = 3600.0f; // 1 hour
 
 static double g_dMapStartUniversalTime = 0.0;
 static float g_fPendingTimelimitAdjust = -1.0f;
@@ -119,8 +118,7 @@ int CountConnectedPlayers()
     int count = 0;
     for (int i = 0; i < gpGlobals->maxClients; i++)
     {
-        auto* controller = static_cast<CBasePlayerController*>(
-            GameEntitySystem()->GetEntityInstance(CEntityIndex(i + 1)));
+        auto* controller = static_cast<CBasePlayerController*>(GameEntitySystem()->GetEntityInstance(CEntityIndex(i + 1)));
         if (controller && controller->m_iConnected() == PlayerConnectedState::Connected)
             ++count;
     }
@@ -159,11 +157,6 @@ void DoChangelevel()
 
 void OnCheckTimer()
 {
-    CGlobalVars* gpGlobals = g_pEngineServer->GetServerGlobals();
-    if (!gpGlobals) return;
-
-    if (gpGlobals->curtime < CURTIME_THRESHOLD) return;
-
     if (CountConnectedPlayers() == 0)
         DoChangelevel();
 }
