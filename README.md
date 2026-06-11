@@ -14,10 +14,14 @@ Valve never added a reset mechanism for `curtime` in any code path.
 
 ## What it does
 
-Every **30 minutes** the plugin checks whether the server is empty (no connected players) and if so performs a changelevel back to the same map:
+Every **1 second** the plugin checks the current player count:
 
-* **Regular map** — calls `IVEngineServer2::ChangeLevel` directly.
-* **Workshop map** — issues a `ds_workshop_changelevel <map>` server command (detected via `IsMapValid`).
+* If the server is **empty**, a **15-minute countdown** starts.
+* If **someone joins** during those 15 minutes, the countdown is cancelled and the plugin waits until the server empties again.
+* If the server stays empty for the full 15 minutes, a changelevel back to the same map is performed:
+
+  * **Regular map** — calls `IVEngineServer2::ChangeLevel` directly.
+  * **Workshop map** — issues a `ds_workshop_changelevel <map>` server command (detected via `IsMapValid`).
 
 ### mp_timelimit compensation
 
@@ -35,14 +39,13 @@ For example, if a 60-minute map was 45 minutes in when the fix fired, the reload
 
 * Server can run indefinitely on the same map without the slow-motion bug appearing
 * No manual restarts required
-* Zero impact during active gameplay — the check only acts on an empty server
+* Zero impact during active gameplay — the reload only happens after the server has been empty for 15 minutes straight
 * Round time is seamlessly preserved via automatic `mp_timelimit` correction
 
 ---
 
 ## Notes
 
-* The check interval is `CHECK_INTERVAL` (`constexpr float` at the top of `plugin.cpp`, default 30 minutes).
 * Uses a self-contained scheduler (`scheduler.h` / `scheduler.cpp`) ticked from `ISource2Server::GameFrame`, modelled after [Source2Toolkit](https://github.com/SlynxCZ).
 * Tested on 64-tick dedicated servers.
 
