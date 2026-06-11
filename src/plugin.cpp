@@ -27,15 +27,14 @@
 
 using namespace DynLibUtils;
 
-CConVarRef<float> mp_timelimit("mp_timelimit");
-
-static constexpr float CHECK_INTERVAL = 1800.0f; // 30 minutes
-
-static double g_dMapStartUniversalTime = 0.0;
-static float g_fPendingTimelimitAdjust = -1.0f;
-
 Plugin g_Plugin;
 PLUGIN_EXPOSE(Plugin, g_Plugin);
+
+CConVarRef<float> mp_timelimit("mp_timelimit");
+
+double g_dMapStartUniversalTime = 0.0;
+float g_fPendingTimelimitAdjust = -1.0f;
+Timer* g_pEmptyServerTimer = nullptr;
 
 class GameSessionConfiguration_t
 {
@@ -65,7 +64,7 @@ bool Plugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool l
     }
 
     scheduler::Init();
-    scheduler::AddTimer(CHECK_INTERVAL, OnCheckTimer, TIMER_FLAG_REPEAT);
+    scheduler::AddTimer(1.0f, OnCheckTimer, TIMER_FLAG_REPEAT);
 
     g_SMAPI->AddListener(this, this);
 
@@ -91,6 +90,7 @@ void Plugin::Hook_GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 void Plugin::Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char*)
 {
     scheduler::RemoveMapChangeTimers();
+    g_pEmptyServerTimer = nullptr;
 
     g_dMapStartUniversalTime = g_dUniversalTime;
 
@@ -157,8 +157,29 @@ void DoChangelevel()
 
 void OnCheckTimer()
 {
-    if (CountConnectedPlayers() == 0)
-        DoChangelevel();
+    int players = CountConnectedPlayers();
+
+    if (players == 0)
+    {
+        // Start 15-min countdown only if not already running
+        if (!g_pEmptyServerTimer)
+        {
+            g_pEmptyServerTimer = scheduler::AddTimer(15.0f * 60.0f, []()
+            {
+                g_pEmptyServerTimer = nullptr;
+                DoChangelevel();
+            });
+        }
+    }
+    else
+    {
+        // Someone is on the server -> cancel the pending changelevel
+        if (g_pEmptyServerTimer)
+        {
+            scheduler::KillTimer(g_pEmptyServerTimer);
+            g_pEmptyServerTimer = nullptr;
+        }
+    }
 }
 
 ///////////////////////////////////////
@@ -193,7 +214,7 @@ const char* Plugin::GetLogTag()
 
 const char* Plugin::GetAuthor()
 {
-    return "Slynx (˙·٠● S l y n x ●٠·˙)";
+    return "Slynx (˙·٠● S l y n x ●٠·˙)";
 }
 
 const char* Plugin::GetDescription()
