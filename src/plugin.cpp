@@ -150,7 +150,7 @@ void DoChangelevel()
     else
     {
         char cmd[512];
-        V_snprintf(cmd, sizeof(cmd), "dg_workshop_changelevel %s\n", mapName);
+        V_snprintf(cmd, sizeof(cmd), "ds_workshop_changelevel %s\n", mapName);
         g_pEngineServer->ServerCommand(cmd);
     }
 }
