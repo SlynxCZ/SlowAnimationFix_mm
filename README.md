@@ -14,24 +14,16 @@ Valve never added a reset mechanism for `curtime` in any code path.
 
 ## What it does
 
-Every **1 second** the plugin checks the current player count:
+On every map start (`StartupServer`) the plugin snapshots the current map name. Then, every **30 minutes**, a repeating timer checks the server:
 
-* If the server is **empty**, a **15-minute countdown** starts.
-* If **someone joins** during those 15 minutes, the countdown is cancelled and the plugin waits until the server empties again.
-* If the server stays empty for the full 15 minutes, a changelevel back to the same map is performed:
+* Player slots 0–63 are scanned for **real players** (bots and GOTV are ignored via the `FL_FAKECLIENT` flag).
+* If **at least one human** is connected, nothing happens — the check simply runs again 30 minutes later.
+* If the server is **empty**, a changelevel back to the same map is performed, resetting `curtime`:
 
   * **Regular map** — calls `IVEngineServer2::ChangeLevel` directly.
   * **Workshop map** — issues a `ds_workshop_changelevel <map>` server command (detected via `IsMapValid`).
 
-### mp_timelimit compensation
-
-To avoid players losing round time after an invisible fix-triggered map reload, the plugin automatically adjusts `mp_timelimit` on the new map:
-
-```
-new_mp_timelimit = original_mp_timelimit - elapsed_minutes_before_reload
-```
-
-For example, if a 60-minute map was 45 minutes in when the fix fired, the reloaded map starts with `mp_timelimit 15` so the total round duration stays 60 minutes.
+The timer survives map changes, so the cycle continues indefinitely.
 
 ---
 
@@ -39,14 +31,15 @@ For example, if a 60-minute map was 45 minutes in when the fix fired, the reload
 
 * Server can run indefinitely on the same map without the slow-motion bug appearing
 * No manual restarts required
-* Zero impact during active gameplay — the reload only happens after the server has been empty for 15 minutes straight
-* Round time is seamlessly preserved via automatic `mp_timelimit` correction
+* Zero impact during active gameplay — the reload only ever happens on an empty server
+* Fully self-contained — no external Utils/Players plugins required
 
 ---
 
 ## Notes
 
 * Uses a self-contained scheduler (`scheduler.h` / `scheduler.cpp`) ticked from `ISource2Server::GameFrame`, modelled after [Source2Toolkit](https://github.com/SlynxCZ).
+* Player detection is done directly through the entity system (`CBasePlayerController` + schema fields), no external player-manager plugin needed.
 * Tested on 64-tick dedicated servers.
 
 ---
