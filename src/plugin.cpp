@@ -4,7 +4,7 @@
 #include "scheduler.h"
 #include "utils.hpp"
 
-#include "CBasePlayerController.h"
+#include "CBaseEntity.h"
 
 #include "memaddr.hpp"
 #include "module.hpp"
@@ -14,13 +14,8 @@
 #include "icvar.h"
 #include "iserver.h"
 #include "interfaces/interfaces.h"
-#include "tier1/convar.h"
 
-#include <cstdint>
-#include <sstream>
 #include <cstdio>
-#include <iomanip>
-#include <unordered_set>
 
 #define VERSION_STRING SEMVER " @ " GITHUB_SHA
 #define BUILD_TIMESTAMP __DATE__ " " __TIME__
@@ -30,11 +25,14 @@ using namespace DynLibUtils;
 Plugin g_Plugin;
 PLUGIN_EXPOSE(Plugin, g_Plugin);
 
-CConVarRef<float> mp_timelimit("mp_timelimit");
+// Snapshot of the current map name, taken at StartupServer (map start)
+char g_szMap[256] = "";
 
-double g_dMapStartUniversalTime = 0.0;
-float g_fPendingTimelimitAdjust = -1.0f;
-Timer* g_pEmptyServerTimer = nullptr;
+// Reference plugin reloads the map every 30 minutes when the server is empty
+constexpr float MAP_RELOAD_INTERVAL = 1800.0f;
+
+bool IsFakeClient(int iSlot);
+void OnMapReloadTimer();
 
 class GameSessionConfiguration_t
 {
@@ -42,10 +40,6 @@ class GameSessionConfiguration_t
 
 SH_DECL_HOOK3_void(ISource2Server, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
 SH_DECL_HOOK3_void(INetworkServerService, StartupServer, SH_NOATTRIB, 0, const GameSessionConfiguration_t&, ISource2WorldSession*, const char*);
-
-int CountConnectedPlayers();
-void DoChangelevel();
-void OnCheckTimer();
 
 bool Plugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool late)
 {
@@ -59,16 +53,20 @@ bool Plugin::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool l
     GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
 
     {
-        m_iGameFrameHookID = SH_ADD_HOOK(ISource2Server, GameFrame, g_pSource2Server, SH_MEMBER(this, &Plugin::Hook_GameFrame), false);
-        m_iStartupServerHookID = SH_ADD_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService, SH_MEMBER(this, &Plugin::Hook_StartupServer), false);
+        m_iGameFrameHookID = SH_ADD_HOOK(ISource2Server, GameFrame, g_pSource2Server, SH_MEMBER(this, &Plugin::Hook_GameFrame), true);
+        m_iStartupServerHookID = SH_ADD_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService, SH_MEMBER(this, &Plugin::Hook_StartupServer), true);
     }
 
     scheduler::Init();
-    scheduler::AddTimer(1.0f, OnCheckTimer, TIMER_FLAG_REPEAT);
 
     g_SMAPI->AddListener(this, this);
 
     return true;
+}
+
+void Plugin::AllPluginsLoaded()
+{
+    scheduler::AddTimer(MAP_RELOAD_INTERVAL, OnMapReloadTimer, TIMER_FLAG_REPEAT);
 }
 
 bool Plugin::Unload(char* error, size_t maxlen)
@@ -90,94 +88,49 @@ void Plugin::Hook_GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 void Plugin::Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char*)
 {
     scheduler::RemoveMapChangeTimers();
-    g_pEmptyServerTimer = nullptr;
 
-    g_dMapStartUniversalTime = g_dUniversalTime;
+    const char* mapName = nullptr;
+    if (CNetworkGameServerBase* pGameServer = g_pNetworkServerService->GetIGameServer())
+        mapName = pGameServer->GetMapName();
 
-    if (g_fPendingTimelimitAdjust >= 0.0f)
-    {
-        float adjusted = g_fPendingTimelimitAdjust;
-        g_fPendingTimelimitAdjust = -1.0f;
-
-        scheduler::NextFrame([adjusted]()
-        {
-            char cmd[64];
-            V_snprintf(cmd, sizeof(cmd), "mp_timelimit %.1f\n", (adjusted > 0.0f ? adjusted : 0.1f));
-            g_pEngineServer->ServerCommand(cmd);
-        });
-    }
+    V_snprintf(g_szMap, sizeof(g_szMap), "%s", (mapName && mapName[0]) ? mapName : "unknown");
 
     RETURN_META(MRES_IGNORED);
 }
 
-int CountConnectedPlayers()
+bool IsFakeClient(int iSlot)
 {
-    CGlobalVars* gpGlobals = g_pEngineServer->GetServerGlobals();
-    if (!gpGlobals) return 0;
+    CGameEntitySystem* pEntitySystem = GameEntitySystem();
+    if (!pEntitySystem)
+        return true;
 
-    int count = 0;
-    for (int i = 0; i < gpGlobals->maxClients; i++)
-    {
-        auto* controller = static_cast<CBasePlayerController*>(GameEntitySystem()->GetEntityInstance(CEntityIndex(i + 1)));
-        if (controller && controller->m_iConnected() == PlayerConnectedState::Connected)
-            ++count;
-    }
-    return count;
+    auto* controller = static_cast<CBaseEntity*>(pEntitySystem->GetEntityInstance(CEntityIndex(iSlot + 1)));
+    if (!controller)
+        return true;
+
+    return (controller->m_fFlags() & FL_FAKECLIENT) != 0;
 }
 
-void DoChangelevel()
+void OnMapReloadTimer()
 {
-    CNetworkGameServerBase* pGameServer = g_pNetworkServerService->GetIGameServer();
-    if (!pGameServer) return;
-
-    const char* mapName = pGameServer->GetMapName();
-    if (!mapName || mapName[0] == '\0') return;
-
-    double elapsedSeconds = g_dUniversalTime - g_dMapStartUniversalTime;
-    float elapsedMinutes = static_cast<float>(elapsedSeconds) / 60.0f;
-
-    float originalTimelimit = 0.0f;
-    if (mp_timelimit.IsValidRef())
-        originalTimelimit = mp_timelimit.Get();
-
-    if (originalTimelimit > 0.0f)
-        g_fPendingTimelimitAdjust = originalTimelimit - elapsedMinutes;
-
-    if (g_pEngineServer->IsMapValid(mapName))
+    int iPlayers = 0;
+    for (int i = 0; i < 64; i++)
     {
-        g_pEngineServer->ChangeLevel(mapName, nullptr);
+        if (!IsFakeClient(i))
+            iPlayers++;
     }
-    else
-    {
-        char cmd[512];
-        V_snprintf(cmd, sizeof(cmd), "ds_workshop_changelevel %s\n", mapName);
-        g_pEngineServer->ServerCommand(cmd);
-    }
-}
 
-void OnCheckTimer()
-{
-    int players = CountConnectedPlayers();
-
-    if (players == 0)
+    if (g_szMap[0] && !iPlayers)
     {
-        // Start 15-min countdown only if not already running
-        if (!g_pEmptyServerTimer)
+        if (g_pEngineServer->IsMapValid(g_szMap))
         {
-            g_pEmptyServerTimer = scheduler::AddTimer(15.0f * 60.0f, []()
-            {
-                g_pEmptyServerTimer = nullptr;
-                DoChangelevel();
-            });
+            g_pEngineServer->ChangeLevel(g_szMap, nullptr);
         }
-    }
-    else
-    {
-        // Someone is on the server -> cancel the pending changelevel
-        if (g_pEmptyServerTimer)
+        else
         {
-            scheduler::KillTimer(g_pEmptyServerTimer);
-            g_pEmptyServerTimer = nullptr;
+            char szBuffer[256];
+            V_snprintf(szBuffer, sizeof(szBuffer), "ds_workshop_changelevel %s", g_szMap);
+            g_pEngineServer->ServerCommand(szBuffer);
         }
     }
 }

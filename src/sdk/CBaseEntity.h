@@ -9,4 +9,5 @@ public:
 	SCHEMA_FIELD(int32_t, CBaseEntity, m_iMaxHealth);
 	SCHEMA_FIELD(LifeState_t, CBaseEntity, m_lifeState);
 	SCHEMA_FIELD(uint8_t, CBaseEntity, m_iTeamNum);
+    SCHEMA_FIELD(uint32_t, CBaseEntity, m_fFlags);
 };

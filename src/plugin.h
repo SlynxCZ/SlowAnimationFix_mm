@@ -13,6 +13,7 @@ class Plugin final : public ISmmPlugin, IMetamodListener
 public:
 	bool Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool late) override;
 	bool Unload(char* error, size_t maxlen) override;
+	void AllPluginsLoaded() override;
 
 private:
 	const char* GetAuthor() override;
