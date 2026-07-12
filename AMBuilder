@@ -66,6 +66,7 @@ for sdk_target in MMSPlugin.sdk_targets:
     os.path.join(CSGO_PROTO_DIR, 'gameevents.proto'),
     os.path.join(CSGO_PROTO_DIR, 'clientmessages.proto'),
     os.path.join(CSGO_PROTO_DIR, 'te.proto'),
+    os.path.join(CSGO_PROTO_DIR, 'valveextensions.proto'),
   ])]
 
   nodes = builder.Add(binary)
