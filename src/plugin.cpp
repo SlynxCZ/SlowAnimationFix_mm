@@ -4,7 +4,7 @@
 #include "scheduler.h"
 #include "utils.hpp"
 
-#include "CBaseEntity.h"
+#include "CBasePlayerController.h"
 
 #include "memaddr.hpp"
 #include "module.hpp"
@@ -16,6 +16,7 @@
 #include "interfaces/interfaces.h"
 
 #include <cstdio>
+#include <tier0/dbg.h>
 
 #define VERSION_STRING SEMVER " @ " GITHUB_SHA
 #define BUILD_TIMESTAMP __DATE__ " " __TIME__
@@ -31,7 +32,6 @@ char g_szMap[256] = "";
 // Reference plugin reloads the map every 30 minutes when the server is empty
 constexpr float MAP_RELOAD_INTERVAL = 1800.0f;
 
-bool IsFakeClient(int iSlot);
 void OnMapReloadTimer();
 
 class GameSessionConfiguration_t
@@ -95,43 +95,52 @@ void Plugin::Hook_StartupServer(const GameSessionConfiguration_t& config, ISourc
 
     V_snprintf(g_szMap, sizeof(g_szMap), "%s", (mapName && mapName[0]) ? mapName : "unknown");
 
+    META_LOG(this, "StartupServer: map snapshot = '%s'\n", g_szMap);
+
     RETURN_META(MRES_IGNORED);
-}
-
-bool IsFakeClient(int iSlot)
-{
-    CGameEntitySystem* pEntitySystem = GameEntitySystem();
-    if (!pEntitySystem)
-        return true;
-
-    auto* controller = static_cast<CBaseEntity*>(pEntitySystem->GetEntityInstance(CEntityIndex(iSlot + 1)));
-    if (!controller)
-        return true;
-
-    return (controller->m_fFlags() & FL_FAKECLIENT) != 0;
 }
 
 void OnMapReloadTimer()
 {
+    CGameEntitySystem* pEntitySystem = GameEntitySystem();
+    if (!pEntitySystem)
+        return;
+
     int iPlayers = 0;
     for (int i = 0; i < 64; i++)
     {
-        if (!IsFakeClient(i))
-            iPlayers++;
+        auto* pController = static_cast<CBasePlayerController*>(pEntitySystem->GetEntityInstance(CEntityIndex(i + 1)));
+        if (!pController || pController->IsBot() || !pController->IsConnected())
+            continue;
+
+        iPlayers++;
     }
 
-    if (g_szMap[0] && !iPlayers)
+    META_LOG(&g_Plugin, "reload check: map='%s', human players=%d\n", g_szMap, iPlayers);
+
+    if (!g_szMap[0])
     {
-        if (g_pEngineServer->IsMapValid(g_szMap))
-        {
-            g_pEngineServer->ChangeLevel(g_szMap, nullptr);
-        }
-        else
-        {
-            char szBuffer[256];
-            V_snprintf(szBuffer, sizeof(szBuffer), "ds_workshop_changelevel %s", g_szMap);
-            g_pEngineServer->ServerCommand(szBuffer);
-        }
+        META_LOG(&g_Plugin, "reload skipped: no map snapshot (StartupServer hook did not run?)\n");
+        return;
+    }
+
+    if (iPlayers > 0)
+    {
+        META_LOG(&g_Plugin, "reload skipped: %d human player(s) connected, next check in %.0f s\n", iPlayers, MAP_RELOAD_INTERVAL);
+        return;
+    }
+
+    if (g_pEngineServer->IsMapValid(g_szMap))
+    {
+        META_LOG(&g_Plugin, "server empty -> ChangeLevel('%s')\n", g_szMap);
+        g_pEngineServer->ChangeLevel(g_szMap, nullptr);
+    }
+    else
+    {
+        char szBuffer[256];
+        V_snprintf(szBuffer, sizeof(szBuffer), "ds_workshop_changelevel %s", g_szMap);
+        META_LOG(&g_Plugin, "server empty, map not valid as regular map -> '%s'\n", szBuffer);
+        g_pEngineServer->ServerCommand(szBuffer);
     }
 }
 

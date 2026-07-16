@@ -20,6 +20,7 @@ for sdk_target in MMSPlugin.sdk_targets:
   ]
 
   binary.sources += [
+    os.path.join('src', 'sdk', 'CBasePlayerController.cpp'),
     os.path.join('src', 'sdk', 'schemasystem_helper.cpp'),
     os.path.join('vendor', 'dynlibutils', 'src', 'module.cpp')
   ]
