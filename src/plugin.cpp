@@ -14,6 +14,7 @@
 #include "icvar.h"
 #include "iserver.h"
 #include "interfaces/interfaces.h"
+#include "tier1/convar.h"
 
 #include <cstdio>
 #include <tier0/dbg.h>
@@ -28,6 +29,13 @@ PLUGIN_EXPOSE(Plugin, g_Plugin);
 
 // Snapshot of the current map name, taken at StartupServer (map start)
 char g_szMap[256] = "";
+
+CConVarRef<float> mp_timelimit("mp_timelimit");
+
+// Universal time at map start, used to compute how much of the timelimit already elapsed
+double g_dMapStartUniversalTime = 0.0;
+// Remaining timelimit (minutes) to restore after an empty-server reload; < 0 = nothing pending
+float g_fPendingTimelimitAdjust = -1.0f;
 
 // Reference plugin reloads the map every 30 minutes when the server is empty
 constexpr float MAP_RELOAD_INTERVAL = 1800.0f;
@@ -97,6 +105,24 @@ void Plugin::Hook_StartupServer(const GameSessionConfiguration_t& config, ISourc
 
     META_LOG(this, "StartupServer: map snapshot = '%s'\n", g_szMap);
 
+    g_dMapStartUniversalTime = g_dUniversalTime;
+
+    if (g_fPendingTimelimitAdjust >= 0.0f)
+    {
+        float adjusted = g_fPendingTimelimitAdjust;
+        g_fPendingTimelimitAdjust = -1.0f;
+
+        scheduler::NextFrame([adjusted]()
+        {
+            if (!mp_timelimit.IsValidRef())
+                return;
+
+            float value = (adjusted > 0.0f ? adjusted : 0.1f);
+            META_LOG(&g_Plugin, "restoring remaining timelimit -> mp_timelimit %.1f\n", value);
+            mp_timelimit.Set(value);
+        });
+    }
+
     RETURN_META(MRES_IGNORED);
 }
 
@@ -128,6 +154,19 @@ void OnMapReloadTimer()
     {
         META_LOG(&g_Plugin, "reload skipped: %d human player(s) connected, next check in %.0f s\n", iPlayers, MAP_RELOAD_INTERVAL);
         return;
+    }
+
+    double elapsedSeconds = g_dUniversalTime - g_dMapStartUniversalTime;
+    float elapsedMinutes = static_cast<float>(elapsedSeconds) / 60.0f;
+
+    float originalTimelimit = 0.0f;
+    if (mp_timelimit.IsValidRef())
+        originalTimelimit = mp_timelimit.Get();
+
+    if (originalTimelimit > 0.0f)
+    {
+        g_fPendingTimelimitAdjust = originalTimelimit - elapsedMinutes;
+        META_LOG(&g_Plugin, "timelimit %.1f min, elapsed %.1f min -> will restore %.1f min after reload\n", originalTimelimit, elapsedMinutes, g_fPendingTimelimitAdjust);
     }
 
     if (g_pEngineServer->IsMapValid(g_szMap))
