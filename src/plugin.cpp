@@ -110,7 +110,7 @@ void OnMapReloadTimer()
     for (int i = 0; i < 64; i++)
     {
         auto* pController = static_cast<CBasePlayerController*>(pEntitySystem->GetEntityInstance(CEntityIndex(i + 1)));
-        if (!pController || pController->IsBot() || !pController->IsConnected())
+        if (!pController || pController->IsBot() || pController->IsHLTV() || !pController->IsConnected())
             continue;
 
         iPlayers++;

@@ -16,3 +16,8 @@ bool CBasePlayerController::IsConnected()
 {
     return m_iConnected() == PlayerConnectedState::PlayerConnected;
 }
+
+bool CBasePlayerController::IsHLTV()
+{
+    return m_bIsHLTV();
+}

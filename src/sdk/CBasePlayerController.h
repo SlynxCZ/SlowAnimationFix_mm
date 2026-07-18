@@ -18,7 +18,9 @@ class CBasePlayerController : public CBaseEntity
 {
 public:
 	SCHEMA_FIELD(PlayerConnectedState, CBasePlayerController, m_iConnected);
+	SCHEMA_FIELD(bool, CBasePlayerController, m_bIsHLTV);
 
     bool IsBot();
     bool IsConnected();
+    bool IsHLTV();
 };
