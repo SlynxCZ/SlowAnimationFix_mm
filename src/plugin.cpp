@@ -129,18 +129,20 @@ void Plugin::Hook_StartupServer(const GameSessionConfiguration_t& config, ISourc
 void OnMapReloadTimer()
 {
     CGameEntitySystem* pEntitySystem = GameEntitySystem();
-    if (!pEntitySystem)
+    CGlobalVars* pGlobalVars = g_pEngineServer->GetServerGlobals();
+
+    if (!pEntitySystem || !pGlobalVars)
         return;
 
     int iPlayers = 0;
-    for (int i = 0; i < 64; i++)
-    {
-        auto* pController = static_cast<CBasePlayerController*>(pEntitySystem->GetEntityInstance(CEntityIndex(i + 1)));
-        if (!pController || pController->IsBot() || pController->IsHLTV() || !pController->IsConnected())
-            continue;
-
-        iPlayers++;
-    }
+    for (int i = 0; i < pGlobalVars->maxClients; i++)
+	{
+        auto pController = static_cast<CBasePlayerController*>(pEntitySystem->GetEntityInstance(CEntityIndex(i + 1)));
+        if (pController && pController->IsConnected() && !pController->IsBot() && !pController->IsHLTV())
+        {
+            iPlayers++;
+        }
+	}
 
     META_LOG(&g_Plugin, "reload check: map='%s', human players=%d\n", g_szMap, iPlayers);
 
