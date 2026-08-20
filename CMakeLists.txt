@@ -24,6 +24,12 @@ endif()
 include(makefiles/shared.cmake)
 include(makefiles/protobuf.cmake)
 
+# This plugin's own private SourceHook, not metamod's shared one -- see
+# makefiles/shared.cmake and src/plugin.h. Its own test suite stays out of
+# this build.
+set(SOURCEHOOK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(vendor/sourcehook)
+
 file(GLOB_RECURSE SOURCE_FILES
     src/*.cpp
     src/*.h
@@ -37,11 +43,6 @@ list(APPEND SOURCE_FILES
     ${SOURCESDK_DIR}/entity2/entityidentity.cpp
     ${SOURCESDK_DIR}/entity2/entitysystem.cpp
     ${SOURCESDK_DIR}/entity2/entitykeyvalues.cpp
-    ${METAMOD_DIR}/core/sourcehook/sourcehook.cpp
-    ${METAMOD_DIR}/core/sourcehook/sourcehook_impl_chookidman.cpp
-    ${METAMOD_DIR}/core/sourcehook/sourcehook_impl_chookmaninfo.cpp
-    ${METAMOD_DIR}/core/sourcehook/sourcehook_impl_cvfnptr.cpp
-    ${METAMOD_DIR}/core/sourcehook/sourcehook_impl_cproto.cpp
     vendor/dynlibutils/src/module.cpp
 )
 

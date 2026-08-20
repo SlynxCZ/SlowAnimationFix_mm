@@ -258,8 +258,15 @@ class MMSPluginConfig(object):
     cxx.cxxincludes += [
       os.path.join(context.currentSourcePath),
       os.path.join(mms_core_path),
-      os.path.join(mms_core_path, 'sourcehook'),
+      # NOT os.path.join(mms_core_path, 'sourcehook'): this plugin brings its
+      # own private SourceHook (vendor/sourcehook submodule), decoupled from
+      # whatever sourcehook version metamod.so on the target server was built
+      # with. AddPublicIncludes() below covers every header a consumer needs,
+      # including the shim that keeps metamod's own ISmmPlugin.h
+      # `#include "sourcehook.h"` resolving -- to our copy.
     ]
+
+    self.sourcehook_lib['config'].AddPublicIncludes(binary)
 
     defines = []
     for other_sdk in self.sdk_manifests:
@@ -281,6 +288,8 @@ class MMSPluginConfig(object):
 MMSPlugin = MMSPluginConfig()
 MMSPlugin.detectSDKs()
 MMSPlugin.configure()
+
+MMSPlugin.sourcehook_lib = builder.Build('vendor/sourcehook/AMBuildScript', {})
 
 BuildScripts = [
   'AMBuilder',

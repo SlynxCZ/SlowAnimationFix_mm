@@ -1,0 +1,3 @@
+[submodule "vendor/sourcehook"]
+	path = vendor/sourcehook
+	url = https://github.com/SlynxCZ/SourceHook.git

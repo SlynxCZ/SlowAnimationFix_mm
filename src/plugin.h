@@ -6,6 +6,14 @@
 
 #include "inetchannel.h"
 #include "ISmmPlugin.h"
+
+// Redirects SH_GLOB_SHPTR/SH_GLOB_PLUGPTR onto a private, plugin-owned
+// SourceHook engine (vendor/sourcehook) instead of metamod's shared
+// g_SHPtr/g_PLID -- must come after ISmmPlugin.h (which is what defines
+// the defaults this overrides) and before any SH_DECL_HOOK*/SH_ADD_*HOOK/
+// SH_DECL_INLINEHOOK* usage. See the header itself for the full rationale
+// and the SH_METAMOD_OVERRIDE_SAVEVARS(id) call this pairs with in Load().
+#include "sourcehook/sourcehook_metamod_override.h"
 #include "iserver.h"
 
 class Plugin final : public ISmmPlugin, IMetamodListener
