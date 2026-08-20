@@ -1,3 +1,7 @@
 [submodule "vendor/sourcehook"]
 	path = vendor/sourcehook
 	url = https://github.com/SlynxCZ/SourceHook.git
+[submodule "vendor/dynlibutils"]
+	path = vendor/dynlibutils
+	url = https://github.com/SlynxCZ/DynLibUtils.git
+	branch = main

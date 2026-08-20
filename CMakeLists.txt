@@ -29,6 +29,7 @@ include(makefiles/protobuf.cmake)
 # this build.
 set(SOURCEHOOK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(vendor/sourcehook)
+add_subdirectory(vendor/dynlibutils)
 
 file(GLOB_RECURSE SOURCE_FILES
     src/*.cpp
@@ -43,7 +44,6 @@ list(APPEND SOURCE_FILES
     ${SOURCESDK_DIR}/entity2/entityidentity.cpp
     ${SOURCESDK_DIR}/entity2/entitysystem.cpp
     ${SOURCESDK_DIR}/entity2/entitykeyvalues.cpp
-    vendor/dynlibutils/src/module.cpp
 )
 
 foreach(f ${SOURCE_FILES})

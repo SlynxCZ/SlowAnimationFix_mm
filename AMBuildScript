@@ -290,6 +290,7 @@ MMSPlugin.detectSDKs()
 MMSPlugin.configure()
 
 MMSPlugin.sourcehook_lib = builder.Build('vendor/sourcehook/AMBuildScript', {})
+MMSPlugin.dynlibutils_lib = builder.Build('vendor/dynlibutils/AMBuildScript', {})
 
 BuildScripts = [
   'AMBuilder',
