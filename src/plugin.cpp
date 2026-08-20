@@ -94,15 +94,11 @@ void Plugin::Hook_GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
     RETURN_META(MRES_IGNORED);
 }
 
-void Plugin::Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char*)
+void Plugin::Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char* pszMapName)
 {
     scheduler::RemoveMapChangeTimers();
 
-    const char* mapName = nullptr;
-    if (CNetworkGameServerBase* pGameServer = g_pNetworkServerService->GetIGameServer())
-        mapName = pGameServer->GetMapName();
-
-    V_snprintf(g_szMap, sizeof(g_szMap), "%s", (mapName && mapName[0]) ? mapName : "unknown");
+    V_snprintf(g_szMap, sizeof(g_szMap), "%s", (pszMapName && pszMapName[0]) ? pszMapName : "unknown");
 
     META_LOG(this, "StartupServer: map snapshot = '%s'\n", g_szMap);
 

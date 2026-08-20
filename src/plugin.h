@@ -35,7 +35,7 @@ private:
 
 public:
 	void Hook_GameFrame(bool simulating, bool bFirstTick, bool bLastTick);
-	void Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char*);
+	void Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char* pszMapName);
 
 	int m_iGameFrameHookID;
 	int m_iStartupServerHookID;
