@@ -21,12 +21,8 @@ for sdk_target in MMSPlugin.sdk_targets:
 
   binary.sources += [
     os.path.join('src', 'sdk', 'CBasePlayerController.cpp'),
-    os.path.join('src', 'sdk', 'schemasystem_helper.cpp')
-  ]
-
-  binary.compiler.linkflags += [
-    MMSPlugin.sourcehook_lib['binaries_by_arch'][cxx.target.arch],
-    MMSPlugin.dynlibutils_lib[cxx.target.arch],
+    os.path.join('src', 'sdk', 'schemasystem_helper.cpp'),
+    os.path.join('vendor', 'dynlibutils', 'src', 'module.cpp')
   ]
 
   binary.compiler.cxxincludes += [
@@ -54,6 +50,7 @@ for sdk_target in MMSPlugin.sdk_targets:
   binary.custom = [builder.tools.Protoc(protoc = sdk_target.protoc, sources = [
     os.path.join(CSGO_PROTO_DIR, 'network_connection.proto'),
     os.path.join(CSGO_PROTO_DIR, 'networkbasetypes.proto'),
+    os.path.join(CSGO_PROTO_DIR, 'networksystem_protomessages.proto'),
     os.path.join(CSGO_PROTO_DIR, 'cs_gameevents.proto'),
     os.path.join(CSGO_PROTO_DIR, 'cs_usercmd.proto'),
     os.path.join(CSGO_PROTO_DIR, 'base_gcmessages.proto'),
