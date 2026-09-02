@@ -146,4 +146,5 @@ jobs:
           file: SlowAnimationFix_mm_*.tar.gz
           tag: ${{ github.ref }}
           file_glob: true
+          overwrite: true
           release_name: "${{ github.ref_name }}"
