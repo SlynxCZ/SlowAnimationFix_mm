@@ -24,6 +24,14 @@
 
 using namespace DynLibUtils;
 
+// The vendored SourceHook static library's own translation units compile
+// without sourcehook_metamod_override.h, so they reference the bare g_SHPtr
+// symbol the engine internals expect. Define it here, pointing at the same
+// plugin-private instance the override header routes this plugin's SH_*
+// macros to, so both halves use one engine. Hidden so it never interposes on
+// (or binds to) another plugin's global via RTLD_GLOBAL.
+__attribute__((visibility("hidden"))) SourceHook::ISourceHook *g_SHPtr = &g_SourceHookImpl;
+
 Plugin g_Plugin;
 PLUGIN_EXPOSE(Plugin, g_Plugin);
 

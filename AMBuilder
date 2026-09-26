@@ -25,6 +25,10 @@ for sdk_target in MMSPlugin.sdk_targets:
     os.path.join('vendor', 'dynlibutils', 'src', 'module.cpp')
   ]
 
+  binary.compiler.linkflags += [
+    MMSPlugin.sourcehook_lib['binaries_by_arch'][cxx.target.arch],
+  ]
+
   binary.compiler.cxxincludes += [
     os.path.join(builder.sourcePath, 'src'),
     os.path.join(builder.sourcePath, 'src', 'protobuf'),
