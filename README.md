@@ -1,3 +1,25 @@
+> [!WARNING]
+> **This repository is archived and no longer maintained.**
+> The slow animation fix now lives in **[GameFixes_mm](https://github.com/SlynxCZ/GameFixes_mm)**, one Metamod:Source plugin that bundles all of my CS2 server fixes. Each fix is turned on or off on its own in the config.
+> Release binaries here were built against an older Metamod and may not load on current Metamod builds (plugin API 18).
+
+## Migrating to GameFixes_mm
+
+1. Remove `addons/slow_animation_fix/` and `addons/metamod/slow_animation_fix.vdf` from your server.
+2. Install the latest **[GameFixes_mm release](https://github.com/SlynxCZ/GameFixes_mm/releases)**.
+3. Enable the `slow_animation` block in `addons/game_fixes/game_fixes.ini`:
+
+   ```
+   "slow_animation"
+   {
+   	"enable"	"1"
+   }
+   ```
+
+Issues and PRs go to [GameFixes_mm](https://github.com/SlynxCZ/GameFixes_mm).
+
+---
+
 # SlowAnimationFix_mm
 
 **Metamod plugin fixing slow-motion/sluggish animation bug on CS2 servers.**
