@@ -13,6 +13,9 @@ for sdk_target in MMSPlugin.sdk_targets:
   cxx = sdk_target.cxx
 
   binary = MMSPlugin.HL2Library(builder, cxx, MMSPlugin.plugin_name, sdk)
+  binary.compiler.linkflags += [
+    MMSPlugin.sourcehook_lib['binaries_by_arch'][cxx.target.arch]
+  ]
 
   binary.sources += [
     os.path.join('src', 'plugin.cpp'),

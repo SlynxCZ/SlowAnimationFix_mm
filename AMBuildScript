@@ -258,6 +258,7 @@ class MMSPluginConfig(object):
     cxx.cxxincludes += [
       os.path.join(context.currentSourcePath),
       os.path.join(mms_core_path),
+      os.path.join(self.mms_root, 'third_party', 'khook', 'include'),
       # NOT os.path.join(mms_core_path, 'sourcehook'): this plugin brings its
       # own private SourceHook (vendor/sourcehook submodule), decoupled from
       # whatever sourcehook version metamod.so on the target server was built

@@ -7,6 +7,10 @@
 #include "inetchannel.h"
 #include "ISmmPlugin.h"
 
+#if METAMOD_PLAPI_VERSION < 18
+#error "SlowAnimationFix requires Metamod plugin API 18 headers; update MMSOURCE_DEV / --mms_path and rebuild."
+#endif
+
 // Redirects SH_GLOB_SHPTR/SH_GLOB_PLUGPTR onto a private, plugin-owned
 // SourceHook engine (vendor/sourcehook) instead of metamod's shared
 // g_SHPtr/g_PLID -- must come after ISmmPlugin.h (which is what defines

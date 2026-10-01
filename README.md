@@ -46,7 +46,20 @@ The timer survives map changes, so the cycle continues indefinitely.
 
 ## Requirements
 
-* Metamod:Source (CS2)
+* Metamod:Source 2.0 development build with plugin API 18 (CS2).
+
+### Updating from older releases
+
+If Metamod reports `Plugin uses old SourceHook Metamod build ... (17 < 18)`,
+the installed binary was compiled with older Metamod headers. Rebuild with
+current `alliedmodders/metamod-source` headers (including its recursive
+submodules), or install a release rebuilt with plugin API 18. Replace the
+installed platform binary and restart the server.
+
+The private SourceHook engine does not bypass Metamod's plugin API check.
+Both AMBuild (`--mms_path`) and CMake (`MMSOURCE_DEV`) must point at an updated
+Metamod checkout. Changing only the reported API number is insufficient:
+API 18 also changes the hook interface supplied by Metamod.
 
 ---
 

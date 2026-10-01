@@ -60,6 +60,7 @@ include_directories(
     ${SOURCESDK}/public/game/server
     ${SOURCESDK}/public/schemasystem
     ${METAMOD_DIR}/core
+    ${METAMOD_DIR}/third_party/khook/include
     # NOT ${METAMOD_DIR}/core/sourcehook: this plugin brings its own private
     # SourceHook (vendor/sourcehook submodule), decoupled from whatever
     # sourcehook version metamod.so on the target server was built against.

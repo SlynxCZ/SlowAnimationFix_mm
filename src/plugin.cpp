@@ -27,6 +27,14 @@ using namespace DynLibUtils;
 Plugin g_Plugin;
 PLUGIN_EXPOSE(Plugin, g_Plugin);
 
+// API 18 no longer defines g_SHPtr in PLUGIN_EXPOSE. The vendored
+// SourceHook implementation still uses it internally, so bind it to the
+// same private engine used by our hooks. Keep it local to this binary.
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((visibility("hidden")))
+#endif
+SourceHook::ISourceHook* g_SHPtr = g_pSourceHook;
+
 // Snapshot of the current map name, taken at StartupServer (map start)
 char g_szMap[256] = "";
 
